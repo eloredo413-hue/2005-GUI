@@ -74,6 +74,10 @@ clients. This file lists each source and what it was used for.
 - **Sprite crash:** `applySpriteToImage` indexed a nil sprite entry for sprites that exist only as cloud IDs.
 - **Single parts couldn't trigger OnTouch:** a standalone part directly in the spawned-models folder could never trigger a beacon.
 - **"Flat" didn't stick:** making a face Flat left the stud texture behind, and the 3D bump pool rebuilt the bumps.
+- **Figure floated:** your 2005 figure was placed at your avatar's height plus a lift, so it hovered in edit mode. It now stands on whatever is under you.
+- **Invisible thing in the way:** your real avatar is hidden, but it still blocked the figure (Humanoids turn Torso / Head collision back on every physics step) and the Drag tool could grab it. It is now non-solid on every step and clicks pass straight through it. It also stays parked during GO instead of falling out of the world and respawning.
+- **GO froze in 3D stud mode:** every frame, each 3D bump on a moving part was moved by setting its CFrame. Because bumps are welded to their part, that teleported the whole model once per bump, and a model with hundreds of bumps froze the game. Welded bumps now just ride along with physics.
+- **ForceField and particles:** the spawn ForceField bubble, particle emitters, sparkles, fire, smoke and explosion blasts are hidden on your screen, since 2005 had none of them (setting `HIDE_FORCEFIELDS_AND_PARTICLES`).
 - **Dead View items:** the CameraMenu, Controllers and Camera/TrackView items referenced fields that were never set.
 
 ## Still unverified

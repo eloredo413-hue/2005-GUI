@@ -35,6 +35,7 @@ local Config = {
 	ADD_3D_2005_BUMPS_TO_BRICKS = true,
 	MAX_3D_BUMPS_PER_PART = 256,
 	CONVERT_ALL_PLAYERS_TO_DYNABLOX_MAN = true,
+	HIDE_FORCEFIELDS_AND_PARTICLES = true, -- 2005 had no spawn ForceField bubble and no particle effects
 	DYNABLOX_MAN_ASSET_ID = "rbxassetid://14098578999",
 	STUDIO_FREECAM_ENABLED = true, -- True 2005 Studio FreeCam (never locked to a player!)
 	FOLLOW_PLAYER_WHEN_RUNNING = false, -- Smoothly track Dynablox-man in Run (GO) mode while still allowing CameraMenu/Right-Click orbit
@@ -99,7 +100,6 @@ while not LocalPlayer do
 	LocalPlayer = Players.LocalPlayer
 end
 local Camera = Workspace.CurrentCamera
-local Mouse = LocalPlayer:GetMouse()
 
 -- Shared state table to keep top-level local variable count low for all executors
 local S = {
@@ -2639,6 +2639,12 @@ local function syncPart3DBumpsCFrame(part, checkOverlap)
 						b.Anchored = true
 					end
 					b.CFrame = wcf
+				elseif weld and weld.Enabled and not b.Anchored then
+					-- Already welded, so physics carries it. Setting its CFrame here would teleport the
+					-- whole assembly once per bump, every frame, which froze GO mode in 3D stud mode.
+					if weld.C0 ~= lcf then
+						weld.C0 = lcf
+					end
 				else
 					b.CFrame = wcf
 					if b.Anchored then
@@ -3566,10 +3572,10 @@ local function convertCharacterTo2005Model(character, forceRebuild)
 			desc.LocalTransparencyModifier = 1
 			desc.Transparency = 1
 			desc.CanCollide = false
-			if not isLocal then
-				desc.CanQuery = false
-				desc.CanTouch = false
-			elseif desc ~= hrp then
+			-- The hidden avatar must never take clicks or touches; otherwise the Drag tool grabs it
+			desc.CanQuery = false
+			desc.CanTouch = false
+			if isLocal and desc ~= hrp then
 				desc.Massless = true
 			end
 		elseif desc:IsA("Decal") or desc:IsA("Texture") then
@@ -3616,14 +3622,24 @@ local function convertCharacterTo2005Model(character, forceRebuild)
 	-- so it can be freely deleted without ever respawning, and the user sets their own player via Controller!
 	local rig = buildProceduralDynabloxMan(chosenColor, S.playerModelStyle)
 	local primary = rig.PrimaryPart
-	local liftY = (S.playerModelStyle == "Man862") and 5.5 or 0.5
 
 	rig.Name = isLocal and "863 Blue figure" or ("Player2005Model_" .. character.Name)
 	rig:SetAttribute("OwnerCharacterName", character.Name)
 	rig:SetAttribute("Is2005PlayerModel", true)
 	local _, curYaw, _ = hrp.CFrame:ToEulerAnglesYXZ()
-	local spawnCF = CFrame.new(hrp.Position.X, math.max(hrp.Position.Y, 4.0) + liftY, hrp.Position.Z) * CFrame.Angles(0, curYaw, 0)
-	rig:PivotTo(spawnCF)
+	rig:PivotTo(CFrame.new(hrp.Position) * CFrame.Angles(0, curYaw, 0))
+	-- Stand the figure's feet on whatever is under the avatar, so it doesn't hover in edit mode
+	local groundY = hrp.Position.Y - 3
+	pcall(function()
+		local rp = RaycastParams.new()
+		rp.FilterType = Enum.RaycastFilterType.Exclude
+		rp.FilterDescendantsInstances = { character, rig, baseStudFolder }
+		local hit = Workspace:Raycast(hrp.Position + Vector3.new(0, 2, 0), Vector3.new(0, -60, 0), rp)
+		if hit then groundY = hit.Position.Y end
+	end)
+	local boxCF, boxSize = rig:GetBoundingBox()
+	local feetY = boxCF.Position.Y - boxSize.Y * 0.5
+	rig:PivotTo(rig:GetPivot() + Vector3.new(0, groundY - feetY, 0))
 	for _, part in ipairs(rig:GetDescendants()) do
 		if part:IsA("BasePart") then
 			part.CanCollide = not part:GetAttribute("Is2005Bump")
@@ -3649,7 +3665,8 @@ local function convertCharacterTo2005Model(character, forceRebuild)
 			desc.Transparency = 1
 			desc.LocalTransparencyModifier = 1
 			desc.CanCollide = false
-			if not isLocal then desc.CanQuery = false end
+			desc.CanQuery = false
+			desc.CanTouch = false
 		elseif desc:IsA("Decal") or desc:IsA("Texture") then
 			desc.Transparency = 1
 		elseif desc:IsA("BillboardGui") and not desc:GetAttribute("ClassicOwned") then
@@ -3658,6 +3675,47 @@ local function convertCharacterTo2005Model(character, forceRebuild)
 	end))
 end
 S.convertCharacterTo2005Model = convertCharacterTo2005Model
+
+-- 2005 had no spawn ForceField bubble and no particle effects: hide the game's own on this client
+if Config.HIDE_FORCEFIELDS_AND_PARTICLES then
+	local function hideEffect(obj)
+		if obj:IsA("ForceField") then
+			obj.Visible = false
+		elseif obj:IsA("ParticleEmitter") then
+			obj.Enabled = false
+			obj:Clear()
+		elseif obj:IsA("Sparkles") or obj:IsA("Fire") or obj:IsA("Smoke") then
+			obj.Enabled = false
+		elseif obj:IsA("Explosion") then
+			obj.Visible = false
+		end
+	end
+	task.spawn(function()
+		for idx, obj in ipairs(Workspace:GetDescendants()) do
+			pcall(hideEffect, obj)
+			if idx % 500 == 0 then
+				task.wait()
+			end
+		end
+	end)
+	storeConnection(Workspace.DescendantAdded:Connect(function(obj)
+		pcall(hideEffect, obj)
+	end))
+end
+
+-- Every real avatar, hidden or not yet hidden, for raycasts that must pass straight through them
+S.getHiddenCharacters = function()
+	local list = {}
+	for char in pairs(convertedCharacters) do
+		if char.Parent then table.insert(list, char) end
+	end
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr.Character and not convertedCharacters[plr.Character] then
+			table.insert(list, plr.Character)
+		end
+	end
+	return list
+end
 
 if Config.CONVERT_ALL_PLAYERS_TO_DYNABLOX_MAN then
 	local function setupPlayerModel(player)
@@ -3672,6 +3730,22 @@ if Config.CONVERT_ALL_PLAYERS_TO_DYNABLOX_MAN then
 		setupPlayerModel(p)
 	end
 	storeConnection(Players.PlayerAdded:Connect(setupPlayerModel))
+
+	-- Humanoids switch Torso/Head collision back on before every physics step, so the hidden avatars
+	-- have to be made non-solid on Stepped too. Without this your own avatar is an invisible wall.
+	storeConnection(RunService.Stepped:Connect(function()
+		for char in pairs(convertedCharacters) do
+			if char.Parent then
+				for _, part in ipairs(char:GetDescendants()) do
+					if part:IsA("BasePart") and part.CanCollide then
+						part.CanCollide = false
+					end
+				end
+			else
+				convertedCharacters[char] = nil
+			end
+		end
+	end))
 
 	task.spawn(function()
 		while Workspace and Workspace.Parent do
@@ -4280,8 +4354,6 @@ local function start2005Simulation()
 	playClassicSound(SOUND_CLICK, 0.5, 1.2)
 
 	if LocalPlayer.Character then
-		local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart") or LocalPlayer.Character:FindFirstChild("Torso")
-		if hrp then hrp.Anchored = false end
 		local rig = S.rigRegistry and S.rigRegistry[LocalPlayer.Character]
 		if rig then
 			for _, desc in ipairs(rig:GetDescendants()) do
@@ -7302,14 +7374,17 @@ local function raycast3DWorldAtScreenPos(screenPos)
 	Camera = Workspace.CurrentCamera
 	if not Camera then return nil, nil, nil end
 	local unitRay = Camera:ScreenPointToRay(screenPos.X, screenPos.Y)
+	local ignore = S.getHiddenCharacters and S.getHiddenCharacters() or {}
+	table.insert(ignore, ArrowRigFolder)
+	table.insert(ignore, baseStudFolder)
 	local rp = RaycastParams.new()
 	rp.FilterType = Enum.RaycastFilterType.Exclude
-	rp.FilterDescendantsInstances = { ArrowRigFolder, baseStudFolder }
+	rp.FilterDescendantsInstances = ignore
 	local hit = Workspace:Raycast(unitRay.Origin, unitRay.Direction * 500, rp)
 	if hit and hit.Instance then
 		return hit.Instance, hit.Position, hit.Normal
 	end
-	return Mouse.Target, (Mouse.Hit and Mouse.Hit.Position or nil), nil
+	return nil, nil, nil
 end
 
 -- Which face of `part` a world-space hit normal belongs to
@@ -7457,7 +7532,11 @@ storeConnection(UserInputService.InputChanged:Connect(function(input)
 		local unitRay = Camera:ScreenPointToRay(input.Position.X, input.Position.Y)
 		local rayParams = RaycastParams.new()
 		rayParams.FilterType = Enum.RaycastFilterType.Exclude
-		rayParams.FilterDescendantsInstances = { S.selectedObject, ArrowRigFolder, baseStudFolder }
+		local ignore = S.getHiddenCharacters and S.getHiddenCharacters() or {}
+		table.insert(ignore, S.selectedObject)
+		table.insert(ignore, ArrowRigFolder)
+		table.insert(ignore, baseStudFolder)
+		rayParams.FilterDescendantsInstances = ignore
 		local maxDist = S.dragMaxRayDist or 85
 		local result = Workspace:Raycast(unitRay.Origin, unitRay.Direction * maxDist, rayParams)
 		if result then
@@ -7505,7 +7584,6 @@ do
 		if Config.CONVERT_ALL_PLAYERS_TO_DYNABLOX_MAN then
 			for char, rig in pairs(S.rigRegistry) do
 				if char and char.Parent then
-					local isLocal = (char == LocalPlayer.Character)
 					local hum = char:FindFirstChildOfClass("Humanoid")
 					if hum then
 						if hum.WalkSpeed ~= 0 then hum.WalkSpeed = 0 end
@@ -7517,14 +7595,14 @@ do
 							ch.LocalTransparencyModifier = 1
 							ch.Transparency = 1
 							ch.CanCollide = false
-							if not isLocal then ch.CanQuery = false end
+							ch.CanQuery = false
 						elseif ch:IsA("Accessory") then
 							local handle = ch:FindFirstChild("Handle")
 							if handle and handle:IsA("BasePart") then
 								handle.LocalTransparencyModifier = 1
 								handle.Transparency = 1
 								handle.CanCollide = false
-								if not isLocal then handle.CanQuery = false end
+								handle.CanQuery = false
 							end
 						end
 					end
@@ -7541,12 +7619,7 @@ do
 						end
 						if rig.PrimaryPart.Position.Y < -35 then
 							rig.PrimaryPart.AssemblyLinearVelocity = Vector3.zero
-							if isLocal and char:FindFirstChild("HumanoidRootPart") then
-								char.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
-								char.HumanoidRootPart.CFrame = CFrame.new(0, 12, 0)
-							else
-								rig:PivotTo(CFrame.new(0, 12, 0))
-							end
+							rig:PivotTo(CFrame.new(0, 12, 0))
 						end
 					end
 				end
@@ -7563,7 +7636,7 @@ do
 			if S.activeBumpParts then
 				for p in pairs(S.activeBumpParts) do
 					if p and p.Parent and p:FindFirstChild("Bumps2005") then
-						if S.lastBumpPartCF[p] ~= p.CFrame then
+						if p.Anchored and S.lastBumpPartCF[p] ~= p.CFrame then
 							syncPart3DBumpsCFrame(p, false)
 						end
 					else
