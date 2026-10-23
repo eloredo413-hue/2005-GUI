@@ -49,7 +49,18 @@ clients. This file lists each source and what it was used for.
 - **Surface:** Flat, Bump, Hinge and four Motor tools (left/right, slow/fast). A tool changes **only the face you click**, as in the recreation's SurfaceTool. Glue and Weld were removed; source 4 says Glue later *superseded* Bumps, and in the 2005 files the surface types are only Smooth / Bumps with Hinge / Motor / SteppingMotor constraints.
 - **Color:** colours were plain RGB in 2005 (the model files store `Color3`, not BrickColor). The page copies a screenshot of the original 2005 Color page that the repo owner supplied: 20 colours in two rows of 10, each a 20 x 20 sunken swatch 4 px apart, with no current-colour well. This replaces the later BrickColor swatches. The colour values and sizes were measured from that screenshot. Blocks3D's `color.html` uses the stock Windows colour-dialog palette instead, which is a placeholder and not what the 2005 client showed.
 - **Controller:** arrow keys (blue flag), W/A/S/D (red flag), Chase, Flee and None. The made-up "Player 2" scheme was removed.
-- **Hopper:** the HopperBin commands a level could hand out (source 4: *Clone, Grab, and Hammer*; source 9 adds GameTool). These replace the figure-spawn buttons, which were not HopperBins.
+- **Hopper:** the seven tools on source 2's 2005 Hopper page (`hopper.html`, `ToolEnum.h`), with their original icons: GameTool, Grab, Clone, Hammer, Slingshot, Rocket and Laser. Source 4 names *Clone, Grab, and Hammer*. Source 9 and Roblox's API dump keep GameTool, Grab, Clone and Hammer as built-in `BinType`s, which the 2005 enum extends with the three weapons. These replace the figure-spawn buttons, which were not HopperBins.
+  - **How it works:** tap tools on the Hopper page to give them to the player. In GO mode they appear in a bar above the toolbox. Tap one, or press 1-7, to hold it, then tap the world to use it.
+  - **What each tool does:**
+    - GameTool drags things like the Drag tool.
+    - Grab picks up a loose brick, carries it and keeps its speed when you let go.
+    - Clone copies what you tap.
+    - Hammer deletes it.
+    - Slingshot fires a ball.
+    - Rocket fires a rocket that blasts bricks within 8 studs apart.
+    - Laser zaps a brick loose.
+  - **STOP undoes the run:** copies, balls and rockets disappear, hammered things come back, and blasted or zapped bricks are rejoined and put back.
+  - **Guessed behaviour:** source 2 never implemented the tools, so how the weapons behave is a best guess based on their names and icons.
 
 ### Model data (source 1)
 - Removed the invented "Kill Brick" (865) and "Win Brick" (866). The real 2005 items are 859 *Lose Game Beacon* and 860 *Win Game Beacon*.
