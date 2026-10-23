@@ -4919,12 +4919,13 @@ local SURFACE_TOOLS_2005 = {
 	{ Name = "Motor Right Fast",  Sprite = "RightMotorFastTool", W = 60, Surface = "Motor", Speed = -3 },
 }
 
--- Colours were plain RGB in 2005 (BrickColor came later): the 28-colour Windows palette, two rows of 14
+-- Colours were plain RGB in 2005 (BrickColor came later): the 20-colour 2005 palette, two rows of 10.
+-- Values measured from a screenshot of the 2005 Color page.
 local COLOR_PALETTE_2005 = {
-	{ 0, 0, 0 }, { 128, 128, 128 }, { 128, 0, 0 }, { 128, 128, 0 }, { 0, 128, 0 }, { 0, 128, 128 }, { 0, 0, 128 },
-	{ 128, 0, 128 }, { 128, 128, 64 }, { 0, 64, 64 }, { 0, 128, 255 }, { 0, 64, 128 }, { 128, 0, 255 }, { 128, 64, 0 },
-	{ 255, 255, 255 }, { 192, 192, 192 }, { 255, 0, 0 }, { 255, 255, 0 }, { 0, 255, 0 }, { 0, 255, 255 }, { 0, 0, 255 },
-	{ 255, 0, 255 }, { 255, 255, 128 }, { 0, 255, 128 }, { 128, 255, 255 }, { 128, 128, 255 }, { 255, 0, 128 }, { 255, 128, 64 },
+	{ 255, 255, 0 }, { 0, 0, 255 }, { 235, 232, 215 }, { 126, 119, 49 }, { 48, 178, 34 },
+	{ 203, 204, 77 }, { 105, 231, 204 }, { 112, 124, 180 }, { 118, 35, 180 }, { 203, 77, 76 },
+	{ 255, 0, 0 }, { 180, 180, 180 }, { 127, 127, 127 }, { 254, 145, 51 }, { 174, 194, 221 },
+	{ 76, 76, 76 }, { 204, 204, 204 }, { 101, 204, 229 }, { 129, 254, 35 }, { 33, 76, 202 },
 }
 
 local CONTROLLER_TOOLS_2005 = {
@@ -5102,7 +5103,7 @@ function rebuildBottomBarContent()
 		local palette = Instance.new("Frame")
 		palette.Name = "Palette"
 		palette.LayoutOrder = 1
-		palette.Size = UDim2.new(0, 14 * 21, 0, 42)
+		palette.Size = UDim2.new(0, 10 * 21, 0, 42)
 		palette.BackgroundTransparency = 1
 		palette.Parent = BottomItemsContainer
 

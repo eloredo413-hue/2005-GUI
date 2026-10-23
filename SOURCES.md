@@ -47,7 +47,7 @@ clients. This file lists each source and what it was used for.
 
 ### Toolbox pages (source 2 `content/page/*.html`, data from source 1)
 - **Surface:** Flat, Bump, Hinge and four Motor tools (left/right, slow/fast). A tool changes **only the face you click**, as in the recreation's SurfaceTool. Glue and Weld were removed; source 4 says Glue later *superseded* Bumps, and in the 2005 files the surface types are only Smooth / Bumps with Hinge / Motor / SteppingMotor constraints.
-- **Color:** colours were plain RGB in 2005 (the model files store `Color3`, not BrickColor). The page is the 28-colour Windows palette plus the current-colour well, replacing the later BrickColor swatches.
+- **Color:** colours were plain RGB in 2005 (the model files store `Color3`, not BrickColor). The page is the 20-colour 2005 palette (two rows of 10) plus the current-colour well, replacing the later BrickColor swatches. The palette values were measured from a screenshot of the original 2005 Color page that the repo owner supplied. Blocks3D's `color.html` uses the stock Windows colour-dialog palette instead, which is a placeholder and not what the 2005 client showed.
 - **Controller:** arrow keys (blue flag), W/A/S/D (red flag), Chase, Flee and None. The made-up "Player 2" scheme was removed.
 - **Hopper:** the HopperBin commands a level could hand out (source 4: *Clone, Grab, and Hammer*; source 9 adds GameTool). These replace the figure-spawn buttons, which were not HopperBins.
 
@@ -79,6 +79,7 @@ clients. This file lists each source and what it was used for.
 - **Model categories:** the toolbox model categories (Blocks / Vehicles / ...) have no 2005 source; the closest is the 2006+ toolbox, which used "Bricks" and "Robots".
 - **Edit and View menus:** these items aren't documented for 2005. They only use commands the 2005 client had, from the left panel and the panels themselves.
 - **Postures:** Stand / Sit / Climb come from the RBLX04 recreation. Only `PostureXML = Stand` appears in the 2005 files.
+- **Exact palette values:** the 20 colours were sampled from a compressed screenshot, so each channel may be off by a few points.
 - **Motor speeds:** the speeds of the four Motor tools are a guess, because the recreation does not implement them.
 
 ## Art
