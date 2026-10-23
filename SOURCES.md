@@ -54,7 +54,7 @@ clients. This file lists each source and what it was used for.
 ### Model data (source 1)
 - Removed the invented "Kill Brick" (865) and "Win Brick" (866). The real 2005 items are 859 *Lose Game Beacon* and 860 *Win Game Beacon*.
 - Models now arrive with their real controller: vehicles and robots use KeyboardRight, the bugs use Chase / Flee, 863 Blue figure uses KeyboardRight and 864 Red Figure uses KeyboardLeft. In 781, 782 and 827 it is the motor parts themselves that carry KeyboardRight. Flags are hidden on the two figures (`ControllerFlagShown = false`).
-- `NameShown` labels: "100 Points", "5 sec", "LOSE!", "WIN!".
+- `NameShown` labels: "100 Points" and "5 sec". The Win / Lose Game Beacons are left unlabelled.
 - OnTouch sounds: Ping, Clock, Boing and Victory. OnTouch is `SingleShot`, so it fires once per run.
 - Figure colours are pure RGB red (255,0,0) and blue (0,0,255), not the later BrickColor values.
 
