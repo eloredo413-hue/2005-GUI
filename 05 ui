@@ -2147,15 +2147,15 @@ MenuBtn.Parent = LeftToolbar
 S.MenuBtn = MenuBtn
 
 local MenuLabel = Instance.new("TextLabel")
-MenuLabel.Position = UDim2.new(0, 10, 0, 0)
-MenuLabel.Size = UDim2.new(1, -10, 1, 0)
+MenuLabel.Position = UDim2.new(0, 0, 0, 0)
+MenuLabel.Size = UDim2.new(1, 0, 1, 0)
 MenuLabel.BackgroundTransparency = 1
 MenuLabel.Text = "MENU"
 MenuLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 MenuLabel.TextStrokeColor3 = Color3.fromRGB(128, 128, 128)
 MenuLabel.TextStrokeTransparency = 0.5
 MenuLabel.TextSize = 14
-MenuLabel.TextXAlignment = Enum.TextXAlignment.Left
+MenuLabel.TextXAlignment = Enum.TextXAlignment.Center
 MenuLabel.Parent = MenuBtn
 apply2006Font(MenuLabel)
 
