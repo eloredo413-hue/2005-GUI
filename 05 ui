@@ -2850,6 +2850,10 @@ local function apply2005StudsToPart(part)
 	if part.Name == "Bump2005" or part:GetAttribute("Is2005Bump") or part:GetAttribute("Is2005HandleArrow") then
 		return
 	end
+	-- Explosions, rockets, balls and laser beams keep their own look (restyling them made the neon flicker)
+	if part:GetAttribute("Is2005Effect") then
+		return
+	end
 	if part.Parent and part.Parent.Name == "Bumps2005" then
 		return
 	end
@@ -3740,6 +3744,7 @@ S.convertCharacterTo2005Model = convertCharacterTo2005Model
 S.showRedExplosionSphere = function(pos, radius)
 	local ball = Instance.new("Part")
 	ball.Name = "Explosion2005"
+	ball:SetAttribute("Is2005Effect", true)
 	ball.Shape = Enum.PartType.Ball
 	ball.Size = Vector3.new(1, 1, 1) * math.clamp(radius * 2, 2, 60)
 	ball.Color = Color3.fromRGB(255, 0, 0)
@@ -5847,7 +5852,7 @@ do
 	PopupTitle.Position = UDim2.new(0, 0, 0, 6)
 	PopupTitle.Size = UDim2.new(1, 0, 0, 24)
 	PopupTitle.BackgroundTransparency = 1
-	PopupTitle.Text = "ROBLOX 2005 STUDIO"
+	PopupTitle.Text = "2005 GUI SETTINGS"
 	PopupTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 	PopupTitle.TextStrokeColor3 = Color3.fromRGB(90, 90, 90)
 	PopupTitle.TextStrokeTransparency = 0
@@ -7725,6 +7730,7 @@ do
 	local function shortLivedPart(name, size, color, cf, life)
 		local p = Instance.new("Part")
 		p.Name = name
+		p:SetAttribute("Is2005Effect", true)
 		p.Size = size
 		p.Color = color
 		p.Material = Enum.Material.SmoothPlastic
@@ -7776,6 +7782,7 @@ do
 		local from, dir = muzzle(aimPoint)
 		local ball = Instance.new("Part")
 		ball.Name = "SlingshotBall2005"
+		ball:SetAttribute("Is2005Effect", true)
 		ball.Shape = Enum.PartType.Ball
 		ball.Size = Vector3.new(1, 1, 1)
 		ball.Color = Color3.fromRGB(255, 0, 0)
@@ -7794,6 +7801,7 @@ do
 		local from, dir = muzzle(aimPoint)
 		local rocket = Instance.new("Part")
 		rocket.Name = "Rocket2005"
+		rocket:SetAttribute("Is2005Effect", true)
 		rocket.Size = Vector3.new(1, 1, 4)
 		rocket.Color = Color3.fromRGB(0, 0, 255)
 		rocket.Material = Enum.Material.SmoothPlastic
