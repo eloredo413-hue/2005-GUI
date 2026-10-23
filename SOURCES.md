@@ -27,7 +27,7 @@ clients. This file lists each source and what it was used for.
   - GO / STOP (65 x 65)
   - Drag (50 x 50)
   - Resize + Axis Drag (40 x 40)
-  - Rotate + Tilt (30 x 30)
+  - Rotate + Tilt (30 x 32, just below Resize so they never overlap)
   - a divider
   - Group, UnGroup and Duplicate as cyan 12 px text, greyed out when they can't apply
   - Delete (40 x 46)
