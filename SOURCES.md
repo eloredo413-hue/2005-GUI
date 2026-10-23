@@ -47,7 +47,7 @@ clients. This file lists each source and what it was used for.
 
 ### Toolbox pages (source 2 `content/page/*.html`, data from source 1)
 - **Surface:** Flat, Bump, Hinge and four Motor tools (left/right, slow/fast). A tool changes **only the face you click**, as in the recreation's SurfaceTool. Glue and Weld were removed; source 4 says Glue later *superseded* Bumps, and in the 2005 files the surface types are only Smooth / Bumps with Hinge / Motor / SteppingMotor constraints.
-- **Color:** colours were plain RGB in 2005 (the model files store `Color3`, not BrickColor). The page is the 20-colour 2005 palette (two rows of 10) plus the current-colour well, replacing the later BrickColor swatches. The palette values were measured from a screenshot of the original 2005 Color page that the repo owner supplied. Blocks3D's `color.html` uses the stock Windows colour-dialog palette instead, which is a placeholder and not what the 2005 client showed.
+- **Color:** colours were plain RGB in 2005 (the model files store `Color3`, not BrickColor). The page copies a screenshot of the original 2005 Color page that the repo owner supplied: 20 colours in two rows of 10, each a 20 x 20 sunken swatch 4 px apart, with no current-colour well. This replaces the later BrickColor swatches. The colour values and sizes were measured from that screenshot. Blocks3D's `color.html` uses the stock Windows colour-dialog palette instead, which is a placeholder and not what the 2005 client showed.
 - **Controller:** arrow keys (blue flag), W/A/S/D (red flag), Chase, Flee and None. The made-up "Player 2" scheme was removed.
 - **Hopper:** the HopperBin commands a level could hand out (source 4: *Clone, Grab, and Hammer*; source 9 adds GameTool). These replace the figure-spawn buttons, which were not HopperBins.
 
@@ -64,6 +64,7 @@ clients. This file lists each source and what it was used for.
 - **Chase / Flee:** they turn toward or away from the nearest model with a different controller.
 - **Set Model Front:** added to the Format menu. Driving and Chase / Flee use the front it sets.
 - **Rotate / Tilt** turn the selection by 90 degrees (Tilt about the Z axis). **Duplicate** drops the copy on top of the original.
+- **No timer tick:** the countdown does not tick each second.
 - **Level properties:** with nothing selected, Properties shows the 2005 Level settings: WinMessage, LoseMessage, HighScoreIsGood, InitialTimerValue (0 = no limit), InitialScoreValue, TimerUpAction and TimerAffectsScore. Win, lose and timer-up stop the run and show the message.
 
 ### Bugs fixed along the way

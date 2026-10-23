@@ -120,7 +120,6 @@ local S = {
 		HighScoreIsGood = true,
 	},
 	currentTimerValue = Config.DEFAULT_TIMER_SECONDS,
-	lastWholeSecond = math.ceil(Config.DEFAULT_TIMER_SECONDS),
 	bonusScore = 0,
 	leaderstatsScore = 0,
 	bottomScrollIndex = 1,
@@ -4273,7 +4272,6 @@ local function start2005Simulation()
 	S.isSimulationRunning = true
 	CenterBanner.Visible = false
 	S.currentTimerValue = S.level.InitialTimerValue
-	S.lastWholeSecond = math.ceil(S.currentTimerValue)
 	S.bonusScore = S.level.InitialScoreValue
 	S.scoreStepAccum = 0
 	saveStudioState()
@@ -5100,30 +5098,49 @@ function rebuildBottomBarContent()
 			end))
 		end
 	elseif S.activeTab == "Color" then
+		-- Matches the 2005 Color page: two rows of ten 20x20 sunken swatches, 4px apart, and nothing else
 		local palette = Instance.new("Frame")
 		palette.Name = "Palette"
 		palette.LayoutOrder = 1
-		palette.Size = UDim2.new(0, 10 * 21, 0, 42)
+		palette.Size = UDim2.new(0, 10 * 24 - 4, 0, 2 * 24 - 4)
 		palette.BackgroundTransparency = 1
 		palette.Parent = BottomItemsContainer
 
 		local grid = Instance.new("UIGridLayout")
 		grid.CellSize = UDim2.new(0, 20, 0, 20)
-		grid.CellPadding = UDim2.new(0, 1, 0, 2)
+		grid.CellPadding = UDim2.new(0, 4, 0, 4)
 		grid.SortOrder = Enum.SortOrder.LayoutOrder
 		grid.Parent = palette
 
+		local function shade(c, k)
+			return Color3.new(c.R * k, c.G * k, c.B * k)
+		end
+
 		for idx, rgb in ipairs(COLOR_PALETTE_2005) do
 			local col = Color3.fromRGB(rgb[1], rgb[2], rgb[3])
+			-- Dark outer edge, a mid-tone top/left inner edge, then the colour itself
 			local swatch = Instance.new("TextButton")
 			swatch.LayoutOrder = idx
-			swatch.BackgroundColor3 = col
-			swatch.BorderSizePixel = 2
-			swatch.BorderMode = Enum.BorderMode.Inset
-			swatch.BorderColor3 = (S.currentBrickColorToApply == col) and Color3.fromRGB(0, 0, 0) or Color3.fromRGB(128, 128, 128)
+			swatch.BackgroundColor3 = shade(col, 0.55)
+			swatch.BorderSizePixel = 0
 			swatch.AutoButtonColor = false
 			swatch.Text = ""
 			swatch.Parent = palette
+
+			local inner = Instance.new("Frame")
+			inner.Position = UDim2.new(0, 1, 0, 1)
+			inner.Size = UDim2.new(1, -2, 1, -2)
+			inner.BackgroundColor3 = shade(col, 0.8)
+			inner.BorderSizePixel = 0
+			inner.Parent = swatch
+
+			local fill = Instance.new("Frame")
+			fill.Position = UDim2.new(0, 2, 0, 2)
+			fill.Size = UDim2.new(1, -3, 1, -3)
+			fill.BackgroundColor3 = col
+			fill.BorderSizePixel = 0
+			fill.Parent = swatch
+
 			storeConnection(swatch.MouseButton1Click:Connect(function()
 				S.currentBrickColorToApply = col
 				if S.selectedObject then
@@ -5135,28 +5152,8 @@ function rebuildBottomBarContent()
 				end
 				playClassicSound(SOUND_CLICK, 0.4, 1.1)
 				if S.refreshPropertyGrid then S.refreshPropertyGrid() end
-				rebuildBottomBarContent()
 			end))
 		end
-
-		-- Current colour well
-		local well = Instance.new("Frame")
-		well.Name = "CurrentColor"
-		well.LayoutOrder = 2
-		well.Size = UDim2.new(0, 32, 0, 32)
-		well.BackgroundColor3 = Color3.fromRGB(236, 233, 216)
-		well.BorderSizePixel = 1
-		well.BorderColor3 = Color3.fromRGB(113, 111, 100)
-		well.Parent = BottomItemsContainer
-
-		local wellColor = Instance.new("Frame")
-		wellColor.AnchorPoint = Vector2.new(0.5, 0.5)
-		wellColor.Position = UDim2.new(0.5, 0, 0.5, 0)
-		wellColor.Size = UDim2.new(0.8, 0, 0.8, 0)
-		wellColor.BackgroundColor3 = S.currentBrickColorToApply
-		wellColor.BorderSizePixel = 1
-		wellColor.BorderColor3 = Color3.fromRGB(128, 128, 128)
-		wellColor.Parent = well
 	elseif S.activeTab == "Controller" then
 		-- Applies to the selection (or your own figure when nothing is selected)
 		local sel = S.selectedObject
@@ -7611,11 +7608,6 @@ do
 			-- Level timer: counts down from InitialTimerValue (0 = no limit) and fires TimerUpAction at zero
 			if lv.InitialTimerValue > 0 and S.currentTimerValue > 0 then
 				S.currentTimerValue = math.max(0, S.currentTimerValue - dt)
-				local wholeSec = math.ceil(S.currentTimerValue)
-				if wholeSec < S.lastWholeSecond and wholeSec > 0 then
-					S.lastWholeSecond = wholeSec
-					playClassicSound(SOUND_TICK, 0.35, 1)
-				end
 				if S.currentTimerValue <= 0 and lv.TimerUpAction ~= "Nothing" then
 					endLevel2005(lv.TimerUpAction)
 					return
