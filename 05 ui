@@ -35,6 +35,7 @@ local Config = {
 	ADD_3D_2005_BUMPS_TO_BRICKS = true,
 	MAX_3D_BUMPS_PER_PART = 256,
 	CONVERT_ALL_PLAYERS_TO_DYNABLOX_MAN = true,
+	HIDE_FORCEFIELDS_AND_PARTICLES = true, -- 2005 had no spawn ForceField bubble and no particle effects
 	DYNABLOX_MAN_ASSET_ID = "rbxassetid://14098578999",
 	STUDIO_FREECAM_ENABLED = true, -- True 2005 Studio FreeCam (never locked to a player!)
 	FOLLOW_PLAYER_WHEN_RUNNING = false, -- Smoothly track Dynablox-man in Run (GO) mode while still allowing CameraMenu/Right-Click orbit
@@ -99,7 +100,6 @@ while not LocalPlayer do
 	LocalPlayer = Players.LocalPlayer
 end
 local Camera = Workspace.CurrentCamera
-local Mouse = LocalPlayer:GetMouse()
 
 -- Shared state table to keep top-level local variable count low for all executors
 local S = {
@@ -120,7 +120,6 @@ local S = {
 		HighScoreIsGood = true,
 	},
 	currentTimerValue = Config.DEFAULT_TIMER_SECONDS,
-	lastWholeSecond = math.ceil(Config.DEFAULT_TIMER_SECONDS),
 	bonusScore = 0,
 	leaderstatsScore = 0,
 	bottomScrollIndex = 1,
@@ -2640,6 +2639,12 @@ local function syncPart3DBumpsCFrame(part, checkOverlap)
 						b.Anchored = true
 					end
 					b.CFrame = wcf
+				elseif weld and weld.Enabled and not b.Anchored then
+					-- Already welded, so physics carries it. Setting its CFrame here would teleport the
+					-- whole assembly once per bump, every frame, which froze GO mode in 3D stud mode.
+					if weld.C0 ~= lcf then
+						weld.C0 = lcf
+					end
 				else
 					b.CFrame = wcf
 					if b.Anchored then
@@ -3460,6 +3465,72 @@ local function getDynabloxManTemplate()
 end
 
 local convertedCharacters = {}
+S.convertedCharacters = convertedCharacters
+
+-- A raycast that only stops on solid parts. Studs, arrow handles, invisible triggers and the hidden avatars are
+-- passed through, so nothing gets stood on (or dragged onto) something you can't see or bump into.
+S.raycastSolid = function(origin, direction, ignoreList)
+	local ignore = S.getHiddenCharacters and S.getHiddenCharacters() or {}
+	for _, inst in ipairs(ignoreList or {}) do
+		table.insert(ignore, inst)
+	end
+	table.insert(ignore, baseStudFolder)
+	if S.ArrowRigFolder then
+		table.insert(ignore, S.ArrowRigFolder)
+	end
+	local rp = RaycastParams.new()
+	rp.FilterType = Enum.RaycastFilterType.Exclude
+	for _ = 1, 12 do
+		rp.FilterDescendantsInstances = ignore
+		local hit = Workspace:Raycast(origin, direction, rp)
+		if not hit or hit.Instance.CanCollide then
+			return hit
+		end
+		table.insert(ignore, hit.Instance)
+	end
+	return nil
+end
+
+-- World-space height of the lowest point of a part or model. 3D studs are left out: they only sit on top
+-- faces, and right after a move they can lag a frame behind their part.
+S.getWorldBottomY = function(obj)
+	local function partBottom(p)
+		local cf, size = p.CFrame, p.Size
+		return cf.Position.Y - (math.abs(cf.RightVector.Y) * size.X + math.abs(cf.UpVector.Y) * size.Y + math.abs(cf.LookVector.Y) * size.Z) * 0.5
+	end
+	if obj:IsA("BasePart") then
+		return partBottom(obj)
+	end
+	local lowest = nil
+	for _, d in ipairs(obj:GetDescendants()) do
+		if d:IsA("BasePart") and not d:GetAttribute("Is2005Bump") then
+			local y = partBottom(d)
+			if not lowest or y < lowest then lowest = y end
+		end
+	end
+	return lowest or obj:GetPivot().Position.Y
+end
+
+-- Move `obj` straight up or down so its lowest point rests on the first solid surface below `fromPos`
+-- (or at `fallbackY` when there is nothing below). Edit mode keeps things anchored, so this is what stops floating.
+S.standOnGround = function(obj, fromPos, fallbackY, ignoreList)
+	if not obj then return end
+	local ignore = { obj }
+	for _, inst in ipairs(ignoreList or {}) do
+		table.insert(ignore, inst)
+	end
+	local hit = S.raycastSolid(fromPos, Vector3.new(0, -300, 0), ignore)
+	local groundY = hit and hit.Position.Y or fallbackY
+	if not groundY then return end
+	local ok, bottomY = pcall(S.getWorldBottomY, obj)
+	if not ok then return end
+	local lift = Vector3.new(0, groundY - bottomY, 0)
+	if obj:IsA("Model") then
+		obj:PivotTo(obj:GetPivot() + lift)
+	else
+		obj.CFrame = obj.CFrame + lift
+	end
+end
 local playerColors = {}
 
 local function lockHumanoidAsPhysicsModel(hum)
@@ -3567,10 +3638,10 @@ local function convertCharacterTo2005Model(character, forceRebuild)
 			desc.LocalTransparencyModifier = 1
 			desc.Transparency = 1
 			desc.CanCollide = false
-			if not isLocal then
-				desc.CanQuery = false
-				desc.CanTouch = false
-			elseif desc ~= hrp then
+			-- The hidden avatar must never take clicks or touches; otherwise the Drag tool grabs it
+			desc.CanQuery = false
+			desc.CanTouch = false
+			if isLocal and desc ~= hrp then
 				desc.Massless = true
 			end
 		elseif desc:IsA("Decal") or desc:IsA("Texture") then
@@ -3579,6 +3650,21 @@ local function convertCharacterTo2005Model(character, forceRebuild)
 			desc.Enabled = false
 		end
 	end
+
+	-- Parts, hair and accessories that load after this point are hidden too
+	storeConnection(character.DescendantAdded:Connect(function(desc)
+		if desc:IsA("BasePart") then
+			desc.Transparency = 1
+			desc.LocalTransparencyModifier = 1
+			desc.CanCollide = false
+			desc.CanQuery = false
+			desc.CanTouch = false
+		elseif desc:IsA("Decal") or desc:IsA("Texture") then
+			desc.Transparency = 1
+		elseif desc:IsA("BillboardGui") and not desc:GetAttribute("ClassicOwned") then
+			desc.Enabled = false
+		end
+	end))
 
 	-- Park and anchor the invisible modern Roblox character so it never falls, collides, or respawns a rig!
 	pcall(function()
@@ -3617,14 +3703,14 @@ local function convertCharacterTo2005Model(character, forceRebuild)
 	-- so it can be freely deleted without ever respawning, and the user sets their own player via Controller!
 	local rig = buildProceduralDynabloxMan(chosenColor, S.playerModelStyle)
 	local primary = rig.PrimaryPart
-	local liftY = (S.playerModelStyle == "Man862") and 5.5 or 0.5
 
 	rig.Name = isLocal and "863 Blue figure" or ("Player2005Model_" .. character.Name)
 	rig:SetAttribute("OwnerCharacterName", character.Name)
 	rig:SetAttribute("Is2005PlayerModel", true)
 	local _, curYaw, _ = hrp.CFrame:ToEulerAnglesYXZ()
-	local spawnCF = CFrame.new(hrp.Position.X, math.max(hrp.Position.Y, 4.0) + liftY, hrp.Position.Z) * CFrame.Angles(0, curYaw, 0)
-	rig:PivotTo(spawnCF)
+	rig:PivotTo(CFrame.new(hrp.Position) * CFrame.Angles(0, curYaw, 0))
+	-- Stand the figure's feet on whatever is under the avatar, so it doesn't hover in edit mode
+	S.standOnGround(rig, hrp.Position + Vector3.new(0, 2, 0), hrp.Position.Y - 3, { character })
 	for _, part in ipairs(rig:GetDescendants()) do
 		if part:IsA("BasePart") then
 			part.CanCollide = not part:GetAttribute("Is2005Bump")
@@ -3643,22 +3729,49 @@ local function convertCharacterTo2005Model(character, forceRebuild)
 	end
 	S.rigRegistry[character] = rig
 	-- NOTE: Do NOT force any character/model to have a Controller unless the user explicitly assigns one!
-
-	storeConnection(character.DescendantAdded:Connect(function(desc)
-		if desc:IsDescendantOf(rig) then return end
-		if desc:IsA("BasePart") then
-			desc.Transparency = 1
-			desc.LocalTransparencyModifier = 1
-			desc.CanCollide = false
-			if not isLocal then desc.CanQuery = false end
-		elseif desc:IsA("Decal") or desc:IsA("Texture") then
-			desc.Transparency = 1
-		elseif desc:IsA("BillboardGui") and not desc:GetAttribute("ClassicOwned") then
-			desc.Enabled = false
-		end
-	end))
 end
 S.convertCharacterTo2005Model = convertCharacterTo2005Model
+
+-- 2005 had no spawn ForceField bubble and no particle effects: hide the game's own on this client
+if Config.HIDE_FORCEFIELDS_AND_PARTICLES then
+	local function hideEffect(obj)
+		if obj:IsA("ForceField") then
+			obj.Visible = false
+		elseif obj:IsA("ParticleEmitter") then
+			obj.Enabled = false
+			obj:Clear()
+		elseif obj:IsA("Sparkles") or obj:IsA("Fire") or obj:IsA("Smoke") then
+			obj.Enabled = false
+		elseif obj:IsA("Explosion") then
+			obj.Visible = false
+		end
+	end
+	task.spawn(function()
+		for idx, obj in ipairs(Workspace:GetDescendants()) do
+			pcall(hideEffect, obj)
+			if idx % 500 == 0 then
+				task.wait()
+			end
+		end
+	end)
+	storeConnection(Workspace.DescendantAdded:Connect(function(obj)
+		pcall(hideEffect, obj)
+	end))
+end
+
+-- Every real avatar, hidden or not yet hidden, for raycasts that must pass straight through them
+S.getHiddenCharacters = function()
+	local list = {}
+	for char in pairs(convertedCharacters) do
+		if char.Parent then table.insert(list, char) end
+	end
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr.Character and not convertedCharacters[plr.Character] then
+			table.insert(list, plr.Character)
+		end
+	end
+	return list
+end
 
 if Config.CONVERT_ALL_PLAYERS_TO_DYNABLOX_MAN then
 	local function setupPlayerModel(player)
@@ -3673,6 +3786,22 @@ if Config.CONVERT_ALL_PLAYERS_TO_DYNABLOX_MAN then
 		setupPlayerModel(p)
 	end
 	storeConnection(Players.PlayerAdded:Connect(setupPlayerModel))
+
+	-- Humanoids switch Torso/Head collision back on before every physics step, so the hidden avatars
+	-- have to be made non-solid on Stepped too. Without this your own avatar is an invisible wall.
+	storeConnection(RunService.Stepped:Connect(function()
+		for char in pairs(convertedCharacters) do
+			if char.Parent then
+				for _, part in ipairs(char:GetDescendants()) do
+					if part:IsA("BasePart") and part.CanCollide then
+						part.CanCollide = false
+					end
+				end
+			else
+				convertedCharacters[char] = nil
+			end
+		end
+	end))
 
 	task.spawn(function()
 		while Workspace and Workspace.Parent do
@@ -3717,6 +3846,7 @@ if ArrowRigFolder then ArrowRigFolder:Destroy() end
 ArrowRigFolder = Instance.new("Folder")
 ArrowRigFolder.Name = "Studio2005ArrowRig"
 ArrowRigFolder.Parent = Workspace
+S.ArrowRigFolder = ArrowRigFolder
 storeConnection({ Disconnect = function() if ArrowRigFolder then ArrowRigFolder:Destroy() end end })
 
 local FACE_NORMALS = {
@@ -4087,7 +4217,7 @@ local function moveStudioObject(obj, targetPos)
 	if not obj then return end
 	local snapped = Vector3.new(
 		math.floor(targetPos.X + 0.5),
-		math.max(1, math.floor(targetPos.Y + 0.5)),
+		targetPos.Y,
 		math.floor(targetPos.Z + 0.5)
 	)
 	if obj:IsA("Model") then
@@ -4273,7 +4403,6 @@ local function start2005Simulation()
 	S.isSimulationRunning = true
 	CenterBanner.Visible = false
 	S.currentTimerValue = S.level.InitialTimerValue
-	S.lastWholeSecond = math.ceil(S.currentTimerValue)
 	S.bonusScore = S.level.InitialScoreValue
 	S.scoreStepAccum = 0
 	saveStudioState()
@@ -4282,8 +4411,6 @@ local function start2005Simulation()
 	playClassicSound(SOUND_CLICK, 0.5, 1.2)
 
 	if LocalPlayer.Character then
-		local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart") or LocalPlayer.Character:FindFirstChild("Torso")
-		if hrp then hrp.Anchored = false end
 		local rig = S.rigRegistry and S.rigRegistry[LocalPlayer.Character]
 		if rig then
 			for _, desc in ipairs(rig:GetDescendants()) do
@@ -4398,6 +4525,7 @@ local function reset2005Game()
 		stop2005Simulation()
 		if S.localPlayerRig and S.localPlayerRig.Parent then
 			S.localPlayerRig:PivotTo(CFrame.new(0, 12, 0))
+			S.standOnGround(S.localPlayerRig, Vector3.new(0, 12, 0), 0)
 		elseif LocalPlayer.Character then
 			LocalPlayer.Character:PivotTo(CFrame.new(0, 12, 0))
 		end
@@ -4500,7 +4628,7 @@ local function attachControllerBadge(targetObj, ctrlType, flagShown)
 end
 S.attachControllerBadge = attachControllerBadge
 
--- 2005 NameShown: the model's name floats above it (e.g. "5 sec", "LOSE!", "WIN!", "100 Points")
+-- 2005 NameShown: the model's name floats above it (e.g. "5 sec", "100 Points")
 local function setNameShown2005(targetObj, labelText)
 	if not targetObj then return end
 	local old = targetObj:FindFirstChild("NameShown2005")
@@ -4617,8 +4745,8 @@ local ORIGINAL_2004_TOOLBOX_MODELS = {
 	{Id="RBXM_856",Num=856,Name="Rotating Obstacle",Category="Construction",Class="Model",Ctrl="KeyboardRight",BBox={6,3,20},OnTouch=nil,Parts={{2,{2,1,4},{0,2.5,-9},{0,0,1,0,1,0,-1,0,0},{128,128,128},false,"TB",nil,nil},{2,{2,1,20},{0,1.5,0},nil,{153,51,26},false,"",nil,nil},{2,{6,1,6},{0,0.5,0},nil,{128,128,128},false,"B",nil,nil},{2,{2,1,4},{0,2.5,9},{0,0,1,0,1,0,-1,0,0},{128,128,128},false,"TB",nil,nil}},Joints={{3,2,3,"Sin",{0,1,0},{0,1,0}},{0,1,2},{0,2,4}}},
 	{Id="RBXM_857",Num=857,Name="Windmill Obstacle - Anchored",Category="Construction",Class="Model",Ctrl="None",BBox={2,12,20},OnTouch=nil,Parts={{2,{2,9,2},{0,4.5,9},nil,{128,128,128},true,"TB",nil,nil},{2,{2,1,20},{0,9.5,0},nil,{128,128,128},true,"TB",nil,nil},{2,{2,2,2},{0,11,0},nil,{128,128,128},true,"TB",nil,nil},{2,{2,9,2},{0,4.5,-9},nil,{128,128,128},true,"TB",nil,nil}},Joints={{0,1,2},{0,2,3},{0,2,4}}},
 	{Id="RBXM_858",Num=858,Name="5 Second Jewel",Category="Buildings",Class="Part",Ctrl="None",Label="5 sec",BBox={2,2,2},OnTouch={Action="Nothing",Score=0,Timer=5,Sound="Clock"},Parts={{1,{2,2,2},{0,1,0},nil,{0,255,255},true,"",nil,nil}},Joints={}},
-	{Id="RBXM_859",Num=859,Name="Lose Game Beacon",Category="Buildings",Class="Part",Ctrl="None",Label="LOSE!",BBox={6,6,6},OnTouch={Action="Lose",Score=0,Timer=0,Sound="Boing"},Parts={{2,{6,6,6},{0,3,0},nil,{230,0,0},true,"TB",nil,nil}},Joints={}},
-	{Id="RBXM_860",Num=860,Name="Win Game Beacon",Category="Buildings",Class="Part",Ctrl="None",Label="WIN!",BBox={6,6,6},OnTouch={Action="Win",Score=0,Timer=0,Sound="Victory"},Parts={{2,{6,6,6},{0,3,0},nil,{204,204,76},true,"TB",nil,nil}},Joints={}},
+	{Id="RBXM_859",Num=859,Name="Lose Game Beacon",Category="Buildings",Class="Part",Ctrl="None",BBox={6,6,6},OnTouch={Action="Lose",Score=0,Timer=0,Sound="Boing"},Parts={{2,{6,6,6},{0,3,0},nil,{230,0,0},true,"TB",nil,nil}},Joints={}},
+	{Id="RBXM_860",Num=860,Name="Win Game Beacon",Category="Buildings",Class="Part",Ctrl="None",BBox={6,6,6},OnTouch={Action="Win",Score=0,Timer=0,Sound="Victory"},Parts={{2,{6,6,6},{0,3,0},nil,{204,204,76},true,"TB",nil,nil}},Joints={}},
 	{Id="RBXM_862",Num=862,Name="Man figure",Category="Robots",Class="Model",Ctrl="KeyboardRight",BBox={2,13,5},OnTouch=nil,Parts={{2,{2,3,3},{0,8.5,0},{-1,0,0,0,1,0,0,0,-1},{204,204,204},false,"TB",nil,nil},{2,{2,2,3},{0,6,0},{-1,0,0,0,1,0,0,0,-1},{102,204,230},false,"TB",nil,nil},{2,{1,2,1},{0,0.5,1},{0,1,0,0,0,-1,-1,0,0},{76,76,76},false,"TB",nil,nil},{2,{1,4,1},{-0.5,9,-2},{0,0,1,0,1,0,-1,0,0},{204,204,204},false,"TB",nil,nil},{2,{1,4,1},{-0.5,3,-1},{0,0,1,0,1,0,-1,0,0},{102,204,230},false,"TB",nil,nil},{2,{1,2,1},{0,0.5,-1},{0,1,0,0,0,-1,-1,0,0},{76,76,76},false,"TB",nil,nil},{2,{1,4,1},{-0.5,3,1},{0,0,1,0,1,0,-1,0,0},{102,204,230},false,"TB",nil,nil},{2,{1,4,1},{-0.5,9,2},{0,0,1,0,1,0,-1,0,0},{204,204,204},false,"TB",nil,nil},{3,{2,2,2},{0,12,-0.5},{0,1,0,-1,0,0,0,0,1},{204,204,76},false,"",nil,nil},{2,{2,1,3},{0,10.5,0},{-1,0,0,0,1,0,0,0,-1},{204,204,204},false,"TB",nil,nil}},Joints={{1,4,10,"NoInput",{0,0,-1},{0,10.5,-1.5}},{1,8,10,"NoInput",{0,0,1},{0,10.5,1.5}},{0,1,2},{0,1,10},{0,2,5},{0,2,7},{0,3,7},{0,5,6},{0,9,10}}},
 	{Id="RBXM_863",Num=863,Name="Blue figure",Category="Robots",Class="PhysicalCharacter",Ctrl="KeyboardRight",FlagShown=false,BBox={2,6,4},OnTouch=nil,Parts={{1,{2,2,2},{0,5,0},{0,0,-1,0,1,0,1,0,0},{255,255,0},false,"",nil,"Head"},{2,{2,1,1},{-0.5,3.5,0},{0,0,-1,0,1,0,1,0,0},{0,0,255},false,"TB",nil,"UpperBody"},{2,{2,1,1},{-0.5,2.5,0},{0,0,-1,0,1,0,1,0,0},{178,178,178},false,"TB",nil,"LowerBody"},{2,{1,2,1},{-0.5,3,1.5},{0,0,-1,0,1,0,1,0,0},{255,255,0},false,"",nil,"RightArm"},{2,{1,2,1},{-0.5,3,-1.5},{0,0,-1,0,1,0,1,0,0},{255,255,0},false,"",nil,"LeftArm"},{2,{1,2,1},{-0.5,1,0.5},{0,0,-1,0,1,0,1,0,0},{0,0,255},false,"B",nil,"RightLeg"},{2,{1,2,1},{-0.5,1,-0.5},{0,0,-1,0,1,0,1,0,0},{0,0,255},false,"B",nil,"LeftLeg"}},Joints={{1,4,2,"NoInput",{0,0,1},{-0.5,3.5,1}},{1,5,2,"NoInput",{0,0,-1},{-0.5,3.5,-1}},{0,1,2},{0,2,3},{0,3,6},{0,3,7}}},
 	{Id="RBXM_864",Num=864,Name="Red Figure",Category="Robots",Class="PhysicalCharacter",Ctrl="KeyboardLeft",FlagShown=false,BBox={2,6,4},OnTouch=nil,Parts={{1,{2,2,2},{0,5,0},{0,0,-1,0,1,0,1,0,0},{255,255,0},false,"",nil,"Head"},{2,{2,1,1},{-0.5,3.5,0},{0,0,-1,0,1,0,1,0,0},{255,0,0},false,"TB",nil,"UpperBody"},{2,{2,1,1},{-0.5,2.5,0},{0,0,-1,0,1,0,1,0,0},{178,178,178},false,"TB",nil,"LowerBody"},{2,{1,2,1},{-0.5,3,1.5},{0,0,-1,0,1,0,1,0,0},{255,255,0},false,"",nil,"RightArm"},{2,{1,2,1},{-0.5,3,-1.5},{0,0,-1,0,1,0,1,0,0},{255,255,0},false,"",nil,"LeftArm"},{2,{1,2,1},{-0.5,1,0.5},{0,0,-1,0,1,0,1,0,0},{255,0,0},false,"B",nil,"RightLeg"},{2,{1,2,1},{-0.5,1,-0.5},{0,0,-1,0,1,0,1,0,0},{255,0,0},false,"B",nil,"LeftLeg"}},Joints={{1,4,2,"NoInput",{0,0,1},{-0.5,3.5,1}},{1,5,2,"NoInput",{0,0,-1},{-0.5,3.5,-1}},{0,1,2},{0,2,3},{0,3,6},{0,3,7}}},
@@ -4848,6 +4976,13 @@ local function spawnOriginal2004Model(modelDef)
 	end
 
 	if spawnedObj then
+		local okTop, topCF, topSize = pcall(function()
+			if spawnedObj:IsA("Model") then return spawnedObj:GetBoundingBox() end
+			return spawnedObj.CFrame, spawnedObj.Size
+		end)
+		if okTop then
+			S.standOnGround(spawnedObj, topCF.Position + Vector3.new(0, topSize.Magnitude * 0.5 + 1, 0), nil)
+		end
 		if container and container:GetAttribute("IsDynabloxFigure") and container.PrimaryPart then
 			ensureUprightGyro(container.PrimaryPart, 0)
 		end
@@ -5100,30 +5235,49 @@ function rebuildBottomBarContent()
 			end))
 		end
 	elseif S.activeTab == "Color" then
+		-- Matches the 2005 Color page: two rows of ten 20x20 sunken swatches, 4px apart, and nothing else
 		local palette = Instance.new("Frame")
 		palette.Name = "Palette"
 		palette.LayoutOrder = 1
-		palette.Size = UDim2.new(0, 10 * 21, 0, 42)
+		palette.Size = UDim2.new(0, 10 * 24 - 4, 0, 2 * 24 - 4)
 		palette.BackgroundTransparency = 1
 		palette.Parent = BottomItemsContainer
 
 		local grid = Instance.new("UIGridLayout")
 		grid.CellSize = UDim2.new(0, 20, 0, 20)
-		grid.CellPadding = UDim2.new(0, 1, 0, 2)
+		grid.CellPadding = UDim2.new(0, 4, 0, 4)
 		grid.SortOrder = Enum.SortOrder.LayoutOrder
 		grid.Parent = palette
 
+		local function shade(c, k)
+			return Color3.new(c.R * k, c.G * k, c.B * k)
+		end
+
 		for idx, rgb in ipairs(COLOR_PALETTE_2005) do
 			local col = Color3.fromRGB(rgb[1], rgb[2], rgb[3])
+			-- Dark outer edge, a mid-tone top/left inner edge, then the colour itself
 			local swatch = Instance.new("TextButton")
 			swatch.LayoutOrder = idx
-			swatch.BackgroundColor3 = col
-			swatch.BorderSizePixel = 2
-			swatch.BorderMode = Enum.BorderMode.Inset
-			swatch.BorderColor3 = (S.currentBrickColorToApply == col) and Color3.fromRGB(0, 0, 0) or Color3.fromRGB(128, 128, 128)
+			swatch.BackgroundColor3 = shade(col, 0.55)
+			swatch.BorderSizePixel = 0
 			swatch.AutoButtonColor = false
 			swatch.Text = ""
 			swatch.Parent = palette
+
+			local inner = Instance.new("Frame")
+			inner.Position = UDim2.new(0, 1, 0, 1)
+			inner.Size = UDim2.new(1, -2, 1, -2)
+			inner.BackgroundColor3 = shade(col, 0.8)
+			inner.BorderSizePixel = 0
+			inner.Parent = swatch
+
+			local fill = Instance.new("Frame")
+			fill.Position = UDim2.new(0, 2, 0, 2)
+			fill.Size = UDim2.new(1, -3, 1, -3)
+			fill.BackgroundColor3 = col
+			fill.BorderSizePixel = 0
+			fill.Parent = swatch
+
 			storeConnection(swatch.MouseButton1Click:Connect(function()
 				S.currentBrickColorToApply = col
 				if S.selectedObject then
@@ -5135,28 +5289,8 @@ function rebuildBottomBarContent()
 				end
 				playClassicSound(SOUND_CLICK, 0.4, 1.1)
 				if S.refreshPropertyGrid then S.refreshPropertyGrid() end
-				rebuildBottomBarContent()
 			end))
 		end
-
-		-- Current colour well
-		local well = Instance.new("Frame")
-		well.Name = "CurrentColor"
-		well.LayoutOrder = 2
-		well.Size = UDim2.new(0, 32, 0, 32)
-		well.BackgroundColor3 = Color3.fromRGB(236, 233, 216)
-		well.BorderSizePixel = 1
-		well.BorderColor3 = Color3.fromRGB(113, 111, 100)
-		well.Parent = BottomItemsContainer
-
-		local wellColor = Instance.new("Frame")
-		wellColor.AnchorPoint = Vector2.new(0.5, 0.5)
-		wellColor.Position = UDim2.new(0.5, 0, 0.5, 0)
-		wellColor.Size = UDim2.new(0.8, 0, 0.8, 0)
-		wellColor.BackgroundColor3 = S.currentBrickColorToApply
-		wellColor.BorderSizePixel = 1
-		wellColor.BorderColor3 = Color3.fromRGB(128, 128, 128)
-		wellColor.Parent = well
 	elseif S.activeTab == "Controller" then
 		-- Applies to the selection (or your own figure when nothing is selected)
 		local sel = S.selectedObject
@@ -7305,14 +7439,17 @@ local function raycast3DWorldAtScreenPos(screenPos)
 	Camera = Workspace.CurrentCamera
 	if not Camera then return nil, nil, nil end
 	local unitRay = Camera:ScreenPointToRay(screenPos.X, screenPos.Y)
+	local ignore = S.getHiddenCharacters and S.getHiddenCharacters() or {}
+	table.insert(ignore, ArrowRigFolder)
+	table.insert(ignore, baseStudFolder)
 	local rp = RaycastParams.new()
 	rp.FilterType = Enum.RaycastFilterType.Exclude
-	rp.FilterDescendantsInstances = { ArrowRigFolder, baseStudFolder }
+	rp.FilterDescendantsInstances = ignore
 	local hit = Workspace:Raycast(unitRay.Origin, unitRay.Direction * 500, rp)
 	if hit and hit.Instance then
 		return hit.Instance, hit.Position, hit.Normal
 	end
-	return Mouse.Target, (Mouse.Hit and Mouse.Hit.Position or nil), nil
+	return nil, nil, nil
 end
 
 -- Which face of `part` a world-space hit normal belongs to
@@ -7337,6 +7474,10 @@ local function beginSelectDrag(input, hitWorldPos)
 	S.dragInputObject = input
 	S.dragStartScreenPos = Vector2.new(input.Position.X, input.Position.Y)
 	S.dragGrabOffset = hitWorldPos and (objPos - hitWorldPos) or Vector3.new(0, obj:IsA("Model") and 2.5 or (obj.Size.Y * 0.5), 0)
+	-- How far the pivot sits above the object's lowest point, so a drag rests it on the surface instead of
+	-- sinking it (grabbed high up) or floating it (grabbed low down)
+	local okBottom, bottomY = pcall(S.getWorldBottomY, obj)
+	S.dragPivotAboveBottom = okBottom and (objPos.Y - bottomY) or nil
 	S.dragMaxRayDist = math.clamp((objPos - camPos).Magnitude * 1.8, 25, 110)
 end
 
@@ -7458,14 +7599,19 @@ storeConnection(UserInputService.InputChanged:Connect(function(input)
 		Camera = Workspace.CurrentCamera
 		if not Camera then return end
 		local unitRay = Camera:ScreenPointToRay(input.Position.X, input.Position.Y)
-		local rayParams = RaycastParams.new()
-		rayParams.FilterType = Enum.RaycastFilterType.Exclude
-		rayParams.FilterDescendantsInstances = { S.selectedObject, ArrowRigFolder, baseStudFolder }
 		local maxDist = S.dragMaxRayDist or 85
-		local result = Workspace:Raycast(unitRay.Origin, unitRay.Direction * maxDist, rayParams)
+		local result = S.raycastSolid(unitRay.Origin, unitRay.Direction * maxDist, { S.selectedObject })
 		if result then
 			local offset = S.dragGrabOffset or Vector3.new(0, S.selectedObject:IsA("Model") and 2.5 or (S.selectedObject.Size.Y * 0.5), 0)
-			moveStudioObject(S.selectedObject, result.Position + offset)
+			local target = result.Position + offset
+			if S.dragPivotAboveBottom and result.Normal.Y > 0.3 then
+				target = Vector3.new(target.X, result.Position.Y + S.dragPivotAboveBottom, target.Z)
+			elseif S.dragPivotAboveBottom then
+				-- Over the side of something: slide sideways without changing height
+				local piv = S.selectedObject:IsA("Model") and S.selectedObject:GetPivot().Position or S.selectedObject.Position
+				target = Vector3.new(target.X, piv.Y, target.Z)
+			end
+			moveStudioObject(S.selectedObject, target)
 		end
 	end
 end))
@@ -7506,9 +7652,8 @@ do
 
 		-- 14B. Keep All Players as Pure 2005 Physics Models (Hide all original avatars & enforce 3D collision on 2005 rigs)
 		if Config.CONVERT_ALL_PLAYERS_TO_DYNABLOX_MAN then
-			for char, rig in pairs(S.rigRegistry) do
-				if char and char.Parent then
-					local isLocal = (char == LocalPlayer.Character)
+			for char in pairs(S.convertedCharacters) do
+				if char.Parent then
 					local hum = char:FindFirstChildOfClass("Humanoid")
 					if hum then
 						if hum.WalkSpeed ~= 0 then hum.WalkSpeed = 0 end
@@ -7520,37 +7665,34 @@ do
 							ch.LocalTransparencyModifier = 1
 							ch.Transparency = 1
 							ch.CanCollide = false
-							if not isLocal then ch.CanQuery = false end
+							ch.CanQuery = false
 						elseif ch:IsA("Accessory") then
 							local handle = ch:FindFirstChild("Handle")
 							if handle and handle:IsA("BasePart") then
 								handle.LocalTransparencyModifier = 1
 								handle.Transparency = 1
 								handle.CanCollide = false
-								if not isLocal then handle.CanQuery = false end
+								handle.CanQuery = false
 							end
 						end
 					end
-					if rig and rig.Parent and rig.PrimaryPart then
-						for _, rp in ipairs(rig:GetChildren()) do
-							if rp:IsA("BasePart") then
-								if rp:GetAttribute("IsSwingingArm2004") then
-									rp.CanCollide = false
-									rp.Anchored = false
-								else
-									rp.CanCollide = true
-								end
-							end
-						end
-						if rig.PrimaryPart.Position.Y < -35 then
-							rig.PrimaryPart.AssemblyLinearVelocity = Vector3.zero
-							if isLocal and char:FindFirstChild("HumanoidRootPart") then
-								char.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
-								char.HumanoidRootPart.CFrame = CFrame.new(0, 12, 0)
+				end
+			end
+			for _, rig in pairs(S.rigRegistry) do
+				if rig and rig.Parent and rig.PrimaryPart then
+					for _, rp in ipairs(rig:GetChildren()) do
+						if rp:IsA("BasePart") then
+							if rp:GetAttribute("IsSwingingArm2004") then
+								rp.CanCollide = false
+								rp.Anchored = false
 							else
-								rig:PivotTo(CFrame.new(0, 12, 0))
+								rp.CanCollide = true
 							end
 						end
+					end
+					if rig.PrimaryPart.Position.Y < -35 then
+						rig.PrimaryPart.AssemblyLinearVelocity = Vector3.zero
+						rig:PivotTo(CFrame.new(0, 12, 0))
 					end
 				end
 			end
@@ -7566,7 +7708,7 @@ do
 			if S.activeBumpParts then
 				for p in pairs(S.activeBumpParts) do
 					if p and p.Parent and p:FindFirstChild("Bumps2005") then
-						if S.lastBumpPartCF[p] ~= p.CFrame then
+						if p.Anchored and S.lastBumpPartCF[p] ~= p.CFrame then
 							syncPart3DBumpsCFrame(p, false)
 						end
 					else
@@ -7611,11 +7753,6 @@ do
 			-- Level timer: counts down from InitialTimerValue (0 = no limit) and fires TimerUpAction at zero
 			if lv.InitialTimerValue > 0 and S.currentTimerValue > 0 then
 				S.currentTimerValue = math.max(0, S.currentTimerValue - dt)
-				local wholeSec = math.ceil(S.currentTimerValue)
-				if wholeSec < S.lastWholeSecond and wholeSec > 0 then
-					S.lastWholeSecond = wholeSec
-					playClassicSound(SOUND_TICK, 0.35, 1)
-				end
 				if S.currentTimerValue <= 0 and lv.TimerUpAction ~= "Nothing" then
 					endLevel2005(lv.TimerUpAction)
 					return

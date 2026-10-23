@@ -47,14 +47,14 @@ clients. This file lists each source and what it was used for.
 
 ### Toolbox pages (source 2 `content/page/*.html`, data from source 1)
 - **Surface:** Flat, Bump, Hinge and four Motor tools (left/right, slow/fast). A tool changes **only the face you click**, as in the recreation's SurfaceTool. Glue and Weld were removed; source 4 says Glue later *superseded* Bumps, and in the 2005 files the surface types are only Smooth / Bumps with Hinge / Motor / SteppingMotor constraints.
-- **Color:** colours were plain RGB in 2005 (the model files store `Color3`, not BrickColor). The page is the 20-colour 2005 palette (two rows of 10) plus the current-colour well, replacing the later BrickColor swatches. The palette values were measured from a screenshot of the original 2005 Color page that the repo owner supplied. Blocks3D's `color.html` uses the stock Windows colour-dialog palette instead, which is a placeholder and not what the 2005 client showed.
+- **Color:** colours were plain RGB in 2005 (the model files store `Color3`, not BrickColor). The page copies a screenshot of the original 2005 Color page that the repo owner supplied: 20 colours in two rows of 10, each a 20 x 20 sunken swatch 4 px apart, with no current-colour well. This replaces the later BrickColor swatches. The colour values and sizes were measured from that screenshot. Blocks3D's `color.html` uses the stock Windows colour-dialog palette instead, which is a placeholder and not what the 2005 client showed.
 - **Controller:** arrow keys (blue flag), W/A/S/D (red flag), Chase, Flee and None. The made-up "Player 2" scheme was removed.
 - **Hopper:** the HopperBin commands a level could hand out (source 4: *Clone, Grab, and Hammer*; source 9 adds GameTool). These replace the figure-spawn buttons, which were not HopperBins.
 
 ### Model data (source 1)
 - Removed the invented "Kill Brick" (865) and "Win Brick" (866). The real 2005 items are 859 *Lose Game Beacon* and 860 *Win Game Beacon*.
 - Models now arrive with their real controller: vehicles and robots use KeyboardRight, the bugs use Chase / Flee, 863 Blue figure uses KeyboardRight and 864 Red Figure uses KeyboardLeft. In 781, 782 and 827 it is the motor parts themselves that carry KeyboardRight. Flags are hidden on the two figures (`ControllerFlagShown = false`).
-- `NameShown` labels: "100 Points", "5 sec", "LOSE!", "WIN!".
+- `NameShown` labels: "100 Points" and "5 sec". The Win / Lose Game Beacons are left unlabelled.
 - OnTouch sounds: Ping, Clock, Boing and Victory. OnTouch is `SingleShot`, so it fires once per run.
 - Figure colours are pure RGB red (255,0,0) and blue (0,0,255), not the later BrickColor values.
 
@@ -64,6 +64,7 @@ clients. This file lists each source and what it was used for.
 - **Chase / Flee:** they turn toward or away from the nearest model with a different controller.
 - **Set Model Front:** added to the Format menu. Driving and Chase / Flee use the front it sets.
 - **Rotate / Tilt** turn the selection by 90 degrees (Tilt about the Z axis). **Duplicate** drops the copy on top of the original.
+- **No timer tick:** the countdown does not tick each second.
 - **Level properties:** with nothing selected, Properties shows the 2005 Level settings: WinMessage, LoseMessage, HighScoreIsGood, InitialTimerValue (0 = no limit), InitialScoreValue, TimerUpAction and TimerAffectsScore. Win, lose and timer-up stop the run and show the message.
 
 ### Bugs fixed along the way
@@ -73,6 +74,14 @@ clients. This file lists each source and what it was used for.
 - **Sprite crash:** `applySpriteToImage` indexed a nil sprite entry for sprites that exist only as cloud IDs.
 - **Single parts couldn't trigger OnTouch:** a standalone part directly in the spawned-models folder could never trigger a beacon.
 - **"Flat" didn't stick:** making a face Flat left the stud texture behind, and the 3D bump pool rebuilt the bumps.
+- **Things floated:** everything stays anchored in edit mode, so anything placed too high just hung in the air. Each of these now rests on the first solid surface below it, skipping invisible non-solid parts and studs:
+  - your 2005 figure, which was placed at your avatar's height plus a lift
+  - models from Insert / the Toolbox, which got an extra 0.2 stud lift and had their height rounded to a whole stud
+  - Reset Game, which put the figure 12 studs up
+  - dragging, which kept your grab point under the finger, so grabbing the head sank the figure and grabbing the feet lifted it
+- **Invisible thing in the way:** your real avatar is hidden, but it still blocked the figure (Humanoids turn Torso / Head collision back on every physics step) and the Drag tool could grab it. It is now non-solid on every step and clicks pass straight through it. It also stays parked during GO instead of falling out of the world and respawning. A respawned avatar is now fully hidden too. Before, its hair, accessories and other parts that loaded after the respawn stayed visible.
+- **GO froze in 3D stud mode:** every frame, each 3D bump on a moving part was moved by setting its CFrame. Because bumps are welded to their part, that teleported the whole model once per bump, and a model with hundreds of bumps froze the game. Welded bumps now just ride along with physics.
+- **ForceField and particles:** the spawn ForceField bubble, particle emitters, sparkles, fire, smoke and explosion blasts are hidden on your screen, since 2005 had none of them (setting `HIDE_FORCEFIELDS_AND_PARTICLES`).
 - **Dead View items:** the CameraMenu, Controllers and Camera/TrackView items referenced fields that were never set.
 
 ## Still unverified
