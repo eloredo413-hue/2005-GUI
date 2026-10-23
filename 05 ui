@@ -3736,7 +3736,7 @@ local function convertCharacterTo2005Model(character, forceRebuild)
 end
 S.convertCharacterTo2005Model = convertCharacterTo2005Model
 
--- Classic explosions were a glowing red sphere that flashed on and off for a moment: show one of `radius` at `pos`
+-- Classic explosions were a glowing red sphere that flashed up for a moment: show one of `radius` at `pos`
 S.showRedExplosionSphere = function(pos, radius)
 	local ball = Instance.new("Part")
 	ball.Name = "Explosion2005"
@@ -3752,13 +3752,7 @@ S.showRedExplosionSphere = function(pos, radius)
 	ball.CastShadow = false
 	ball.CFrame = CFrame.new(pos)
 	ball.Parent = Workspace
-	task.spawn(function()
-		-- on / off / on / off ... about half a second in all
-		for i = 1, 8 do
-			task.wait(0.06)
-			if not ball.Parent then return end
-			ball.Transparency = (i % 2 == 1) and 1 or 0.2
-		end
+	task.delay(1, function()
 		ball:Destroy()
 	end)
 end
@@ -7801,7 +7795,7 @@ do
 		local rocket = Instance.new("Part")
 		rocket.Name = "Rocket2005"
 		rocket.Size = Vector3.new(1, 1, 4)
-		rocket.Color = Color3.fromRGB(255, 255, 255)
+		rocket.Color = Color3.fromRGB(0, 0, 255)
 		rocket.Material = Enum.Material.SmoothPlastic
 		rocket.CanCollide = false
 		rocket.CanQuery = false
