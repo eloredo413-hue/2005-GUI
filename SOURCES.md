@@ -57,7 +57,7 @@ clients. This file lists each source and what it was used for.
     - Clone copies what you tap.
     - Hammer deletes it.
     - Slingshot fires a ball.
-    - Rocket fires a rocket that blasts bricks within 8 studs apart.
+    - Rocket fires a rocket; it bursts into a red sphere and blasts bricks within 8 studs apart.
     - Laser zaps a brick loose.
   - **STOP undoes the run:** copies, balls and rockets disappear, hammered things come back, and blasted or zapped bricks are rejoined and put back.
   - **Guessed behaviour:** source 2 never implemented the tools, so how the weapons behave is a best guess based on their names and icons.
@@ -92,7 +92,10 @@ clients. This file lists each source and what it was used for.
   - dragging, which kept your grab point under the finger, so grabbing the head sank the figure and grabbing the feet lifted it
 - **Invisible thing in the way:** your real avatar is hidden, but it still blocked the figure (Humanoids turn Torso / Head collision back on every physics step) and the Drag tool could grab it. It is now non-solid on every step and clicks pass straight through it. It also stays parked during GO instead of falling out of the world and respawning. A respawned avatar is now fully hidden too. Before, its hair, accessories and other parts that loaded after the respawn stayed visible.
 - **GO froze in 3D stud mode:** every frame, each 3D bump on a moving part was moved by setting its CFrame. Because bumps are welded to their part, that teleported the whole model once per bump, and a model with hundreds of bumps froze the game. Welded bumps now just ride along with physics.
-- **ForceField and particles:** the spawn ForceField bubble, particle emitters, sparkles, fire, smoke and explosion blasts are hidden on your screen, since 2005 had none of them (setting `HIDE_FORCEFIELDS_AND_PARTICLES`).
+- **ForceField, particles and sounds:** these are 2005-accurate on your screen only, and other players still see and hear the modern versions:
+  - **ForceField and particle effects:** spawn ForceField bubbles, particle emitters, sparkles, fire, smoke, trails and beams are hidden. They stay off if a game script turns them back on, and particle bursts fired by scripts are invisible too. Setting: `HIDE_FORCEFIELDS_AND_PARTICLES`.
+  - **Explosions:** they show as a plain red sphere that fades out, and so does the Hopper rocket's blast.
+  - **Avatar sounds:** the footstep, jump and landing sounds Roblox plays from every avatar, including the hidden ones, are muted. Setting: `MUTE_AVATAR_SOUNDS`.
 - **Dead View items:** the CameraMenu, Controllers and Camera/TrackView items referenced fields that were never set.
 
 ## Still unverified
