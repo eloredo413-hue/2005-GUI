@@ -2070,26 +2070,26 @@ MoveBtn.BackgroundTransparency = 1
 MoveBtn.Parent = LeftToolbar
 local MoveFallback = createMetallicOrbFallback(MoveBtn, "+", Color3.fromRGB(215, 140, 20), false, false, false)
 
--- 3D. Rotate & Tilt (30x30)
+-- 3D. Rotate & Tilt (30x32, the size of their art), starting just below Resize / Axis Drag so nothing overlaps
 RotateLeftBtn = Instance.new("ImageButton")
 RotateLeftBtn.Name = "SelectionRotateBtn"
-RotateLeftBtn.Position = UDim2.new(0, 10, 0, 150)
-RotateLeftBtn.Size = UDim2.new(0, 30, 0, 30)
+RotateLeftBtn.Position = UDim2.new(0, 10, 0, 157)
+RotateLeftBtn.Size = UDim2.new(0, 30, 0, 32)
 RotateLeftBtn.BackgroundTransparency = 1
 RotateLeftBtn.Parent = LeftToolbar
 local RotLFallback = createMetallicOrbFallback(RotateLeftBtn, "<-", Color3.fromRGB(40, 40, 40), false, false, false)
 
 RotateRightBtn = Instance.new("ImageButton")
 RotateRightBtn.Name = "SelectionTiltBtn"
-RotateRightBtn.Position = UDim2.new(0, 40, 0, 150)
-RotateRightBtn.Size = UDim2.new(0, 30, 0, 30)
+RotateRightBtn.Position = UDim2.new(0, 40, 0, 157)
+RotateRightBtn.Size = UDim2.new(0, 30, 0, 32)
 RotateRightBtn.BackgroundTransparency = 1
 RotateRightBtn.Parent = LeftToolbar
 local RotRFallback = createMetallicOrbFallback(RotateRightBtn, "->", Color3.fromRGB(40, 40, 40), false, false, false)
 
 -- Divider
 local Div1 = Instance.new("Frame")
-Div1.Position = UDim2.new(0, 5, 0, 185)
+Div1.Position = UDim2.new(0, 5, 0, 192)
 Div1.Size = UDim2.new(0, 70, 0, 1)
 Div1.BackgroundColor3 = Color3.fromRGB(205, 205, 205)
 Div1.BorderSizePixel = 0
@@ -2123,9 +2123,9 @@ local function createLeftActionTextBtn(name, text, posY)
 	return btn, lbl
 end
 
-S.GroupBtn, S.GroupLbl = createLeftActionTextBtn("GroupBtn", "Group", 190)
-S.UnGroupBtn, S.UnGroupLbl = createLeftActionTextBtn("UnGroupBtn", "UnGroup", 215)
-S.DuplicateBtn, S.DuplicateLbl = createLeftActionTextBtn("DuplicateBtn", "Duplicate", 240)
+S.GroupBtn, S.GroupLbl = createLeftActionTextBtn("GroupBtn", "Group", 195)
+S.UnGroupBtn, S.UnGroupLbl = createLeftActionTextBtn("UnGroupBtn", "UnGroup", 216)
+S.DuplicateBtn, S.DuplicateLbl = createLeftActionTextBtn("DuplicateBtn", "Duplicate", 237)
 
 -- 3F. Delete (trash can, 40x46) & MENU
 TrashBtn = Instance.new("ImageButton")
