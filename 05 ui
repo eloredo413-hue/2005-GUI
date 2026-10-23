@@ -35,7 +35,8 @@ local Config = {
 	ADD_3D_2005_BUMPS_TO_BRICKS = true,
 	MAX_3D_BUMPS_PER_PART = 256,
 	CONVERT_ALL_PLAYERS_TO_DYNABLOX_MAN = true,
-	HIDE_FORCEFIELDS_AND_PARTICLES = true, -- 2005 had no spawn ForceField bubble and no particle effects
+	HIDE_FORCEFIELDS_AND_PARTICLES = true, -- 2005 had no spawn ForceField bubble and no particle effects; explosions become a red sphere
+	MUTE_AVATAR_SOUNDS = true, -- silence the footstep / jump / land sounds Roblox plays from every (hidden) avatar
 	DYNABLOX_MAN_ASSET_ID = "rbxassetid://14098578999",
 	STUDIO_FREECAM_ENABLED = true, -- True 2005 Studio FreeCam (never locked to a player!)
 	FOLLOW_PLAYER_WHEN_RUNNING = false, -- Smoothly track Dynablox-man in Run (GO) mode while still allowing CameraMenu/Right-Click orbit
@@ -3735,18 +3736,75 @@ local function convertCharacterTo2005Model(character, forceRebuild)
 end
 S.convertCharacterTo2005Model = convertCharacterTo2005Model
 
--- 2005 had no spawn ForceField bubble and no particle effects: hide the game's own on this client
-if Config.HIDE_FORCEFIELDS_AND_PARTICLES then
+-- 2005 explosions were a plain red sphere: show one of `radius` at `pos` that fades out quickly
+S.showRedExplosionSphere = function(pos, radius)
+	local ball = Instance.new("Part")
+	ball.Name = "Explosion2005"
+	ball.Shape = Enum.PartType.Ball
+	ball.Size = Vector3.new(1, 1, 1) * math.clamp(radius * 2, 2, 60)
+	ball.Color = Color3.fromRGB(255, 0, 0)
+	ball.Material = Enum.Material.SmoothPlastic
+	ball.Transparency = 0.4
+	ball.Anchored = true
+	ball.CanCollide = false
+	ball.CanQuery = false
+	ball.CanTouch = false
+	ball.CastShadow = false
+	ball.CFrame = CFrame.new(pos)
+	ball.Parent = Workspace
+	task.spawn(function()
+		for i = 1, 6 do
+			task.wait(0.06)
+			if not ball.Parent then return end
+			ball.Transparency = 0.4 + i * 0.1
+		end
+		ball:Destroy()
+	end)
+end
+
+-- Is `obj` inside an avatar or NPC (a model with a Humanoid), as opposed to a 2005 model you built?
+local function isInsideAvatar(obj)
+	local model = obj:FindFirstAncestorOfClass("Model")
+	while model do
+		if model:FindFirstChildOfClass("Humanoid") then
+			return not model:IsDescendantOf(SpawnedModelsFolder)
+		end
+		model = model.Parent and model.Parent:FindFirstAncestorOfClass("Model") or nil
+	end
+	return false
+end
+
+-- Keep a property at a value even if a game script sets it back
+local function pin(obj, prop, value)
+	obj[prop] = value
+	obj:GetPropertyChangedSignal(prop):Connect(function()
+		if obj[prop] ~= value then obj[prop] = value end
+	end)
+end
+
+-- Hide the game's modern effects on this client and mute the avatars' walking sounds
+if Config.HIDE_FORCEFIELDS_AND_PARTICLES or Config.MUTE_AVATAR_SOUNDS then
+	local hideFx = Config.HIDE_FORCEFIELDS_AND_PARTICLES
 	local function hideEffect(obj)
-		if obj:IsA("ForceField") then
-			obj.Visible = false
+		if obj:IsA("Sound") then
+			if Config.MUTE_AVATAR_SOUNDS and isInsideAvatar(obj) then
+				obj:Stop()
+				pin(obj, "Volume", 0)
+			end
+		elseif not hideFx then
+			return
+		elseif obj:IsA("ForceField") then
+			pin(obj, "Visible", false)
 		elseif obj:IsA("ParticleEmitter") then
-			obj.Enabled = false
+			-- Invisible as well as off, so a script's :Emit() burst shows nothing either
+			pin(obj, "Enabled", false)
 			obj:Clear()
-		elseif obj:IsA("Sparkles") or obj:IsA("Fire") or obj:IsA("Smoke") then
-			obj.Enabled = false
+			pcall(function() obj.Transparency = NumberSequence.new(1) end)
+		elseif obj:IsA("Sparkles") or obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Trail") or obj:IsA("Beam") then
+			pin(obj, "Enabled", false)
 		elseif obj:IsA("Explosion") then
 			obj.Visible = false
+			S.showRedExplosionSphere(obj.Position, obj.BlastRadius)
 		end
 	end
 	task.spawn(function()
@@ -7703,20 +7761,10 @@ do
 		return from, dir.Unit
 	end
 
-	-- Rocket blast: bricks within 8 studs break loose and fly outward
+	-- Rocket blast: a red sphere, and bricks within 8 studs break loose and fly outward
 	local function blast(pos)
 		playClassicSound(SOUND_BOOP, 0.8, 0.5)
-		local flash = shortLivedPart("Blast2005", Vector3.new(2, 2, 2), Color3.fromRGB(255, 170, 0), CFrame.new(pos), 0.3)
-		flash.Shape = Enum.PartType.Ball
-		flash.Transparency = 0.35
-		task.spawn(function()
-			for i = 1, 6 do
-				task.wait(0.04)
-				if not flash.Parent then break end
-				flash.Size = Vector3.new(2, 2, 2) * (1 + i * 1.2)
-				flash.CFrame = CFrame.new(pos)
-			end
-		end)
+		S.showRedExplosionSphere(pos, 8)
 		local ok, parts = pcall(function() return Workspace:GetPartBoundsInRadius(pos, 8) end)
 		for _, hit in ipairs(ok and parts or {}) do
 			local part = buildPart(hit)
